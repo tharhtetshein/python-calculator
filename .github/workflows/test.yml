@@ -1,6 +1,4 @@
-# .github/workflows/test.yml
-
-name: Run Tests
+name: Run Tests with Caching
 
 on:
   push:
@@ -13,23 +11,23 @@ jobs:
     name: Test Calculator
     runs-on: ubuntu-latest
     
-    # --- CHANGE 1: ADD THE MATRIX STRATEGY ---
-    strategy:
-      matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
-    # -----------------------------------------
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      # --- CHANGE 2: USE THE MATRIX VARIABLE ---
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          # This tells GitHub to swap in 3.9, then 3.10, etc.
-          python-version: ${{ matrix.python-version }}
-      # -----------------------------------------
+          python-version: '3.11'
+      
+      # Cache pip dependencies
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
       
       - name: Install dependencies
         run: |
