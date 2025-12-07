@@ -2,36 +2,39 @@
 
 name: Run Tests
 
-# This workflow runs when you push code or create a pull request
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
 
-# Jobs are the work that gets done
 jobs:
   test:
     name: Test Calculator
     runs-on: ubuntu-latest
     
+    # --- CHANGE 1: ADD THE MATRIX STRATEGY ---
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    # -----------------------------------------
+
     steps:
-      # Step 1: Get the code from your repository
       - name: Checkout code
         uses: actions/checkout@v4
       
-      # Step 2: Set up Python
-      - name: Set up Python
+      # --- CHANGE 2: USE THE MATRIX VARIABLE ---
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          # This tells GitHub to swap in 3.9, then 3.10, etc.
+          python-version: ${{ matrix.python-version }}
+      # -----------------------------------------
       
-      # Step 3: Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      # Step 4: Run the tests
       - name: Run pytest
         run: pytest -v
