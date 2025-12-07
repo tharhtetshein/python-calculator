@@ -1,21 +1,57 @@
+# CI/CD Workflow for Python Calculator
+# This workflow runs linting, testing across multiple scenarios and platforms,
+# and conditionally deploys to production
+name: CI/CD Pipeline
+
+# Trigger on push and pull requests to main branch
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # Allow manual workflow runs from Actions tab
+  workflow_dispatch:
+
+# Cancel in-progress runs of the same workflow
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Code Linting
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/checkout@v4
+      # Checkout repository code - pinned to specific commit for security
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
       
+      # Setup Python environment
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
         with:
           python-version: '3.11'
+          # Cache pip dependencies for faster builds
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
       
+      # Install linting tool
       - name: Install flake8
         run: pip install flake8
       
+      # Run linter with configured rules
       - name: Run linter
         run: flake8 calculator.py test_calculator.py --max-line-length=100
+      
+      # Debug information (only shown when debug mode is enabled)
+      - name: Debug information
+        if: runner.debug == '1'
+        run: |
+          echo "Runner OS: ${{ runner.os }}"
+          echo "Python version: 3.11"
+          python --version
+          pip list
   
   test-scenarios:
     name: Test ${{ matrix.scenario.name }}
@@ -32,22 +68,38 @@ jobs:
             marker: 'slow'
     
     steps:
-      - uses: actions/checkout@v4
+      # Checkout repository code - pinned to specific commit for security
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
       
+      # Setup Python with dependency caching
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
       
+      # Install test dependencies
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
           pip install pytest-benchmark
       
+      # Run scenario-specific tests with verbose output
       - name: Run ${{ matrix.scenario.name }} tests
-        run: pytest -v -m "${{ matrix.scenario.marker }}"
+        run: pytest -vv -s -m "${{ matrix.scenario.marker }}"
+      
+      # Debug information (only shown when debug mode is enabled)
+      - name: Debug information
+        if: runner.debug == '1'
+        run: |
+          echo "Scenario: ${{ matrix.scenario.name }}"
+          echo "Marker: ${{ matrix.scenario.marker }}"
+          pytest --markers
   
   test:
+    name: Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
     needs: lint
     runs-on: ${{ matrix.os }}
     
@@ -56,57 +108,101 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ['3.9', '3.11', '3.12']
         
-        # Exclude specific combinations
+        # Exclude specific combinations to optimize CI time
         exclude:
           - os: macos-latest
             python-version: '3.9'
         
-        # Include additional specific combinations
+        # Include experimental Python versions
         include:
           - os: ubuntu-latest
             python-version: '3.13-dev'
             experimental: true
       
+      # Don't fail all jobs if one fails
       fail-fast: false
     
     # Allow experimental jobs to fail without failing the workflow
     continue-on-error: ${{ matrix.experimental == true }}
     
     steps:
+      # Checkout repository code - pinned to specific commit for security
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
       
+      # Setup Python with dependency caching
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
       
+      # Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
+      # Run tests with coverage and verbose output
       - name: Run tests with coverage
-        run: pytest -v --cov=calculator --cov-report=term-missing
+        run: pytest -vv --cov=calculator --cov-report=term-missing --cov-report=html
       
+      # Upload coverage data as artifact (7-day retention)
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8  # v4.3.0
         with:
-          name: coverage-report
-          path: .coverage
+          name: coverage-report-${{ matrix.os }}-${{ matrix.python-version }}
+          path: |
+            .coverage
+            htmlcov/
+          retention-days: 7
+      
+      # Debug information (only shown when debug mode is enabled)
+      - name: Debug information
+        if: runner.debug == '1'
+        run: |
+          echo "Runner OS: ${{ runner.os }}"
+          echo "Python version: ${{ matrix.python-version }}"
+          echo "Matrix OS: ${{ matrix.os }}"
+          python --version
+          pip list
+        shell: bash
   
   deploy:
     name: Deploy to Production
     needs: [lint, test]
     runs-on: ubuntu-latest
+    # Only deploy on main branch pushes (not PRs) when all tests pass
     if: |
       github.ref == 'refs/heads/main' &&
       github.event_name == 'push' &&
       success()
     
+    # Use environment for deployment (allows environment protection rules)
+    environment:
+      name: production
+      url: https://example.com
+    
     steps:
+      # Checkout repository code - pinned to specific commit for security
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      
+      # Simulate deployment process
       - name: Simulate deployment
         run: |
-          echo "Deploying to production..."
+          echo "🚀 Deploying to production..."
           echo "Environment: Production"
           echo "Version: ${{ github.sha }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Commit message: ${{ github.event.head_commit.message }}"
+      
+      # Debug information (only shown when debug mode is enabled)
+      - name: Debug information
+        if: runner.debug == '1'
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Repository: ${{ github.repository }}"
+          env
