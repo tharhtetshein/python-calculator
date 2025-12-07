@@ -206,3 +206,94 @@ jobs:
           echo "Ref: ${{ github.ref }}"
           echo "Repository: ${{ github.repository }}"
           env
+  
+  conditional-examples:
+    name: Conditional Steps Examples
+    runs-on: ubuntu-latest
+    # This job demonstrates various conditional patterns
+    if: always()  # Run even if previous jobs fail
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      
+      # Pattern 3a: Run only on main branch
+      - name: Run only on main branch
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "✅ This step runs only on main branch"
+          echo "Current branch: ${{ github.ref }}"
+      
+      # Pattern 3b: Run only on pull requests
+      - name: Run only on pull requests
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "✅ This step runs only on pull requests"
+          echo "PR number: ${{ github.event.pull_request.number }}"
+          echo "PR title: ${{ github.event.pull_request.title }}"
+      
+      # Pattern 3c: Run only on push events (not PRs)
+      - name: Run only on push events
+        if: github.event_name == 'push'
+        run: |
+          echo "✅ This step runs only on push events"
+          echo "Commit SHA: ${{ github.sha }}"
+      
+      # Pattern 3d: Intentional failure for demonstration
+      - name: Step that might fail
+        id: risky-step
+        continue-on-error: true
+        run: |
+          echo "This step might fail..."
+          # Uncomment the next line to see failure handling
+          # exit 1
+          echo "Step completed"
+      
+      # Pattern 3e: Run only if previous step failed
+      - name: Run only on failure
+        if: failure()
+        run: |
+          echo "⚠️ Previous step failed!"
+          echo "This step runs only when a previous step fails"
+      
+      # Pattern 3f: Run only if previous step succeeded
+      - name: Run only on success
+        if: success()
+        run: |
+          echo "✅ All previous steps succeeded!"
+      
+      # Pattern 3g: Always run (even on failure)
+      - name: Always run cleanup
+        if: always()
+        run: |
+          echo "🧹 This step always runs, regardless of previous failures"
+          echo "Job status: ${{ job.status }}"
+      
+      # Pattern 3h: Run only on specific conditions combined
+      - name: Complex conditional
+        if: |
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          success()
+        run: |
+          echo "✅ This runs only on successful push to main"
+      
+      # Pattern 3i: Run based on file changes (requires checkout with fetch-depth: 0)
+      - name: Check if Python files changed
+        id: check-changes
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -q '\.py$'; then
+            echo "python_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "python_changed=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+      
+      - name: Run only if Python files changed
+        if: steps.check-changes.outputs.python_changed == 'true'
+        run: echo "Python files were modified in this commit"
+      
+      # Pattern 3j: Run based on commit message
+      - name: Check commit message
+        if: contains(github.event.head_commit.message, '[skip ci]') == false
+        run: echo "Commit does not contain [skip ci]"

@@ -1,0 +1,171 @@
+# Pattern 2: Scheduled Workflow
+# This workflow runs on a schedule for maintenance tasks
+# Runs every Monday at 2 AM UTC
+name: Weekly Maintenance
+
+on:
+  schedule:
+    # Run every Monday at 2 AM UTC (cron format: minute hour day-of-month month day-of-week)
+    - cron: '0 2 * * 1'
+  workflow_dispatch:  # Also allow manual trigger for testing
+
+jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      
+      - name: Set up Python
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install safety bandit
+      
+      - name: Run security scan on dependencies
+        run: |
+          echo "🔒 Scanning dependencies for known vulnerabilities..."
+          # safety check scans Python dependencies for known security issues
+          safety check --json || echo "⚠️ Security issues found in dependencies"
+      
+      - name: Run static security analysis
+        run: |
+          echo "🔍 Running static security analysis..."
+          # bandit is a security linter for Python
+          bandit -r . -f json -o bandit-report.json || echo "⚠️ Security issues found in code"
+      
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8  # v4.3.0
+        with:
+          name: security-reports-${{ github.run_number }}
+          path: |
+            bandit-report.json
+          retention-days: 30
+  
+  dependency-check:
+    name: Check for Dependency Updates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      
+      - name: Set up Python
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
+        with:
+          python-version: '3.11'
+      
+      - name: Install pip-tools
+        run: pip install pip-tools
+      
+      - name: Check for outdated packages
+        run: |
+          echo "📦 Checking for outdated dependencies..."
+          pip install -r requirements.txt
+          pip list --outdated
+      
+      - name: Generate updated requirements
+        run: |
+          echo "📝 Current requirements:"
+          cat requirements.txt
+          echo ""
+          echo "💡 Consider updating packages if major versions are available"
+  
+  code-quality:
+    name: Code Quality Metrics
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          fetch-depth: 0  # Full history for better analysis
+      
+      - name: Set up Python
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install radon pylint
+      
+      - name: Calculate code complexity
+        run: |
+          echo "📊 Analyzing code complexity..."
+          echo "Cyclomatic Complexity:"
+          radon cc calculator.py -s
+          echo ""
+          echo "Maintainability Index:"
+          radon mi calculator.py -s
+      
+      - name: Run pylint
+        run: |
+          echo "🔍 Running pylint analysis..."
+          pylint calculator.py --exit-zero || true
+      
+      - name: Test coverage check
+        run: |
+          echo "📈 Running tests with coverage..."
+          pytest --cov=calculator --cov-report=term-missing --cov-report=json
+      
+      - name: Upload coverage report
+        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8  # v4.3.0
+        with:
+          name: weekly-coverage-${{ github.run_number }}
+          path: coverage.json
+          retention-days: 30
+  
+  cleanup:
+    name: Cleanup Old Artifacts
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Cleanup info
+        run: |
+          echo "🧹 Artifact cleanup is handled automatically via retention policies"
+          echo "Current retention: 7 days for test artifacts, 30 days for reports"
+          echo "Workflow run: ${{ github.run_number }}"
+          echo "Scheduled run time: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+  
+  summary:
+    name: Weekly Summary
+    needs: [security-scan, dependency-check, code-quality, cleanup]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          echo "📋 Weekly Maintenance Summary"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          echo "Repository: ${{ github.repository }}"
+          echo ""
+          echo "Job Status:"
+          echo "  Security Scan: ${{ needs.security-scan.result }}"
+          echo "  Dependency Check: ${{ needs.dependency-check.result }}"
+          echo "  Code Quality: ${{ needs.code-quality.result }}"
+          echo "  Cleanup: ${{ needs.cleanup.result }}"
+          echo ""
+          echo "Next scheduled run: Next Monday at 2:00 AM UTC"
+          
+          # Check if any jobs failed
+          if [[ "${{ needs.security-scan.result }}" == "failure" ]] || \
+             [[ "${{ needs.dependency-check.result }}" == "failure" ]] || \
+             [[ "${{ needs.code-quality.result }}" == "failure" ]]; then
+            echo "⚠️  Some maintenance tasks need attention"
+          else
+            echo "✅ All maintenance tasks completed successfully"
+          fi

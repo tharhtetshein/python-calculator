@@ -1,0 +1,258 @@
+# Pattern 4: Dynamic Matrix from JSON
+# This workflow demonstrates generating test matrix dynamically
+name: Dynamic Matrix Testing
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  generate-matrix:
+    name: Generate Test Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      timestamp: ${{ steps.set-matrix.outputs.timestamp }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      
+      - name: Generate matrix dynamically
+        id: set-matrix
+        run: |
+          # Example 1: Simple static matrix
+          # echo 'matrix={"python-version":["3.9","3.10","3.11"],"os":["ubuntu-latest"]}' >> $GITHUB_OUTPUT
+          
+          # Example 2: Dynamic matrix based on conditions
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # Minimal matrix for PRs (faster feedback)
+            echo 'matrix={"python-version":["3.11"],"os":["ubuntu-latest"]}' >> $GITHUB_OUTPUT
+          else
+            # Full matrix for main branch
+            echo 'matrix={"python-version":["3.9","3.11","3.12"],"os":["ubuntu-latest","windows-latest","macos-latest"]}' >> $GITHUB_OUTPUT
+          fi
+          
+          # Add timestamp for tracking
+          echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+      
+      - name: Display matrix
+        run: |
+          echo "Generated Matrix:"
+          echo '${{ steps.set-matrix.outputs.matrix }}' | jq .
+          echo "Timestamp: ${{ steps.set-matrix.outputs.timestamp }}"
+  
+  test-dynamic:
+    name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    needs: generate-matrix
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+      fail-fast: false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+      
+      - name: Display matrix info
+        run: |
+          echo "Matrix Configuration from ${{ needs.generate-matrix.outputs.timestamp }}"
+          echo "Python version: ${{ matrix.python-version }}"
+          echo "Operating system: ${{ matrix.os }}"
+          echo "Event: ${{ github.event_name }}"
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run tests
+        run: pytest -v
+  
+  generate-advanced-matrix:
+    name: Generate Advanced Test Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      scenarios: ${{ steps.set-scenarios.outputs.scenarios }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      
+      - name: Generate scenario matrix
+        id: set-scenarios
+        run: |
+          # Generate a more complex matrix with multiple dimensions
+          cat << 'EOF' >> $GITHUB_OUTPUT
+          scenarios=[
+            {
+              "name": "quick-tests",
+              "python": "3.11",
+              "os": "ubuntu-latest",
+              "markers": "not slow",
+              "timeout": 5
+            },
+            {
+              "name": "full-tests",
+              "python": "3.11",
+              "os": "ubuntu-latest",
+              "markers": "",
+              "timeout": 10
+            },
+            {
+              "name": "edge-cases",
+              "python": "3.12",
+              "os": "ubuntu-latest",
+              "markers": "edge",
+              "timeout": 5
+            }
+          ]
+          EOF
+      
+      - name: Display scenarios
+        run: |
+          echo "Generated Scenarios:"
+          echo '${{ steps.set-scenarios.outputs.scenarios }}' | jq .
+  
+  test-scenarios-dynamic:
+    name: ${{ matrix.scenario.name }}
+    needs: generate-advanced-matrix
+    runs-on: ${{ matrix.scenario.os }}
+    timeout-minutes: ${{ matrix.scenario.timeout }}
+    
+    strategy:
+      matrix:
+        scenario: ${{ fromJSON(needs.generate-advanced-matrix.outputs.scenarios) }}
+      fail-fast: false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      
+      - name: Set up Python
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
+        with:
+          python-version: ${{ matrix.scenario.python }}
+          cache: 'pip'
+      
+      - name: Display scenario info
+        run: |
+          echo "Scenario: ${{ matrix.scenario.name }}"
+          echo "Python: ${{ matrix.scenario.python }}"
+          echo "OS: ${{ matrix.scenario.os }}"
+          echo "Markers: ${{ matrix.scenario.markers }}"
+          echo "Timeout: ${{ matrix.scenario.timeout }} minutes"
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run scenario tests
+        run: |
+          if [ -z "${{ matrix.scenario.markers }}" ]; then
+            pytest -v
+          else
+            pytest -v -m "${{ matrix.scenario.markers }}"
+          fi
+        shell: bash
+  
+  matrix-from-file:
+    name: Generate Matrix from Config File
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.read-config.outputs.matrix }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      
+      - name: Create example config file
+        run: |
+          # In a real scenario, this file would be checked into the repo
+          cat << 'EOF' > matrix-config.json
+          {
+            "python-version": ["3.9", "3.11", "3.12"],
+            "os": ["ubuntu-latest"]
+          }
+          EOF
+      
+      - name: Read matrix from file
+        id: read-config
+        run: |
+          MATRIX=$(cat matrix-config.json | jq -c .)
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+      
+      - name: Display matrix from file
+        run: |
+          echo "Matrix loaded from config file:"
+          echo '${{ steps.read-config.outputs.matrix }}' | jq .
+  
+  test-from-file:
+    name: Test from Config - Python ${{ matrix.python-version }}
+    needs: matrix-from-file
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix: ${{ fromJSON(needs.matrix-from-file.outputs.matrix) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      
+      - name: Set up Python
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+      
+      - name: Info
+        run: |
+          echo "Testing with Python ${{ matrix.python-version }} on ${{ matrix.os }}"
+          echo "Matrix was loaded from configuration file"
+      
+      - name: Install and test
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pytest -v
+  
+  summary:
+    name: Dynamic Matrix Summary
+    needs: [test-dynamic, test-scenarios-dynamic, test-from-file]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          echo "📊 Dynamic Matrix Testing Summary"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Job Results:"
+          echo "  Simple Dynamic Matrix: ${{ needs.test-dynamic.result }}"
+          echo "  Advanced Scenarios: ${{ needs.test-scenarios-dynamic.result }}"
+          echo "  Config File Matrix: ${{ needs.test-from-file.result }}"
+          echo ""
+          echo "Event: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref }}"
+          
+          if [[ "${{ needs.test-dynamic.result }}" == "success" ]] && \
+             [[ "${{ needs.test-scenarios-dynamic.result }}" == "success" ]] && \
+             [[ "${{ needs.test-from-file.result }}" == "success" ]]; then
+            echo ""
+            echo "✅ All dynamic matrix tests passed!"
+          else
+            echo ""
+            echo "⚠️ Some tests failed or were skipped"
+          fi
