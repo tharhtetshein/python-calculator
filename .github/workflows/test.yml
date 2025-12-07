@@ -1,5 +1,24 @@
 jobs:
+  lint:
+    name: Code Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install flake8
+        run: pip install flake8
+      
+      - name: Run linter
+        run: flake8 calculator.py test_calculator.py --max-line-length=100
+  
   test:
+    needs: lint
     runs-on: ${{ matrix.os }}
     
     strategy:
@@ -37,5 +56,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      - name: Run pytest
-        run: pytest -v
+      - name: Run tests with coverage
+        run: pytest -v --cov=calculator --cov-report=term-missing
+      
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: .coverage
