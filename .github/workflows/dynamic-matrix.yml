@@ -93,31 +93,8 @@ jobs:
         id: set-scenarios
         run: |
           # Generate a more complex matrix with multiple dimensions
-          cat << 'EOF' >> $GITHUB_OUTPUT
-          scenarios=[
-            {
-              "name": "quick-tests",
-              "python": "3.11",
-              "os": "ubuntu-latest",
-              "markers": "not slow",
-              "timeout": 5
-            },
-            {
-              "name": "full-tests",
-              "python": "3.11",
-              "os": "ubuntu-latest",
-              "markers": "",
-              "timeout": 10
-            },
-            {
-              "name": "edge-cases",
-              "python": "3.12",
-              "os": "ubuntu-latest",
-              "markers": "edge",
-              "timeout": 5
-            }
-          ]
-          EOF
+          SCENARIOS='[{"name":"quick-tests","python":"3.11","os":"ubuntu-latest","markers":"not slow","timeout":5},{"name":"full-tests","python":"3.11","os":"ubuntu-latest","markers":"","timeout":10},{"name":"edge-cases","python":"3.12","os":"ubuntu-latest","markers":"edge","timeout":5}]'
+          echo "scenarios=$SCENARIOS" >> $GITHUB_OUTPUT
       
       - name: Display scenarios
         run: |
