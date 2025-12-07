@@ -11,3 +11,10 @@ requires-python = ">=3.9"
 
 [tool.setuptools]
 py-modules = ["calculator"]
+
+[tool.pytest.ini_options]
+markers = [
+    "basic: Basic operation tests",
+    "edge: Edge case tests",
+    "slow: Slow performance tests",
+]
