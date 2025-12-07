@@ -1,45 +1,33 @@
-name: Run Tests with Secrets
+name: Cross-Platform Testing
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   test:
-    name: Test Calculator
-    runs-on: ubuntu-latest
+    name: Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
     
-    # Set environment variables for the entire job
-    env:
-      DEBUG_MODE: 'true'
-      DATABASE_URL: 'sqlite:///test.db'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.11', '3.12']
+      fail-fast: false  # Continue running even if one job fails
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      
-      - name: Cache pip packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          python-version: ${{ matrix.python-version }}
       
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      # Run tests with secrets
       - name: Run pytest
-        env:
-          API_KEY: ${{ secrets.API_KEY }}
         run: pytest -v
