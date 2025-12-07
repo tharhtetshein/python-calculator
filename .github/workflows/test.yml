@@ -1,38 +1,42 @@
-name: Run Tests Optimized
+name: CI/CD Pipeline
 
 on: [push]
 
 jobs:
+  # JOB 1: RUN TESTS
   test:
     name: Test on Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
-    
-    # STRATEGY: This tells GitHub to run this job 3 times in parallel
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
-
+        python-version: ['3.10', '3.11']
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      
-      # CACHING: This speeds up the workflow by reusing downloaded files
-      - name: Cache pip packages
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-      
-      - name: Install dependencies
+      - run: pip install -r requirements.txt
+      - run: pytest -v
+
+  # JOB 2: DEPLOY (Only runs if tests pass)
+  deploy:
+    name: Deploy to Production
+    needs: test  # <--- CRITICAL: Waits for 'test' job to finish
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' # Only deploy main branch
+    
+    steps:
+      - name: Simulate Deployment
+        env:
+          API_KEY: ${{ secrets.MY_API_KEY }}
         run: |
-          pip install -r requirements.txt
-      
-      - name: Run pytest
-        run: pytest -v
+          echo "Tests passed! Starting deployment..."
+          echo "Using Secret Key: $API_KEY" 
+          echo "Deploying to production server..."
+          echo "Deployment Complete! 🚀"
